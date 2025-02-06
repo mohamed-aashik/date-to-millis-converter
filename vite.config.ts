@@ -7,4 +7,5 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  base: '/date-to-millis-converter/',  // Updated base for your repository
 });
