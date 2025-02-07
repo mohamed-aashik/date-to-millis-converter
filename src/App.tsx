@@ -8,13 +8,13 @@ function App() {
   const [timezones, setTimezones] = useState<string[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDateInput, setIsDateInput] = useState(true);
+  const [showMilliseconds, setShowMilliseconds] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Get all available timezones
     setTimezones(Intl.supportedValuesOf('timeZone'));
 
-    // Close dropdown when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -25,6 +25,14 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (milliseconds) {
+      millisecondsToDate(milliseconds);
+    } else if (date) {
+      dateToMilliseconds(date);
+    }
+  }, [timezone, showMilliseconds]);
+
   const filteredTimezones = timezones.filter(tz => 
     tz.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -33,7 +41,8 @@ function App() {
     if (!dateStr) return;
     try {
       const date = new Date(dateStr);
-      setMilliseconds(date.getTime().toString());
+      const ms = date.getTime();
+      setMilliseconds(ms.toString());
     } catch (error) {
       console.error('Invalid date format');
     }
@@ -45,7 +54,6 @@ function App() {
       const timestamp = parseInt(ms);
       const date = new Date(timestamp);
       
-      // Format the date in the selected timezone
       const formatter = new Intl.DateTimeFormat('en-US', {
         timeZone: timezone,
         year: 'numeric',
@@ -54,6 +62,7 @@ function App() {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
+        fractionalSecondDigits: showMilliseconds ? 3 : undefined,
         hour12: false
       });
       
@@ -63,8 +72,10 @@ function App() {
         dateParts[part.type] = part.value;
       });
       
-      // Create ISO string in the correct format for datetime-local input
-      const formattedDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}T${dateParts.hour}:${dateParts.minute}:${dateParts.second}`;
+      let formattedDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}T${dateParts.hour}:${dateParts.minute}:${dateParts.second}`;
+      if (showMilliseconds && dateParts.fractionalSecond) {
+        formattedDate += `.${dateParts.fractionalSecond}`;
+      }
       setDate(formattedDate);
     } catch (error) {
       console.error('Invalid milliseconds');
@@ -75,17 +86,74 @@ function App() {
     setTimezone(tz);
     setIsOpen(false);
     setSearchQuery('');
-    // Update the date display when timezone changes
-    if (milliseconds) {
+  };
+
+  const handleSwap = () => {
+    setIsDateInput(!isDateInput);
+    if (isDateInput && milliseconds) {
+      millisecondsToDate(milliseconds);
+    } else if (!isDateInput && date) {
+      dateToMilliseconds(date);
+    }
+  };
+
+  const handleMillisecondsToggle = (checked: boolean) => {
+    setShowMilliseconds(checked);
+    // Re-format existing values with or without milliseconds
+    if (isDateInput && date) {
+      dateToMilliseconds(date);
+    } else if (!isDateInput && milliseconds) {
       millisecondsToDate(milliseconds);
     }
   };
+
+  const renderDateInput = () => (
+    <div className="space-y-2">
+      <label className="block">
+        <span className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+          <Calendar size={16} />
+          Date and Time Input
+        </span>
+        <input
+          type="datetime-local"
+          value={date}
+          onChange={(e) => {
+            setDate(e.target.value);
+            dateToMilliseconds(e.target.value);
+          }}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          step={showMilliseconds ? "0.001" : "1"}
+        />
+      </label>
+    </div>
+  );
+
+  const renderMillisecondsInput = () => (
+    <div className="space-y-2">
+      <label className="block">
+        <span className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+          <Clock size={16} />
+          Milliseconds Input (Unix Timestamp)
+        </span>
+        <input
+          type="number"
+          value={milliseconds}
+          onChange={(e) => {
+            setMilliseconds(e.target.value);
+            millisecondsToDate(e.target.value);
+          }}
+          placeholder="Enter milliseconds..."
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </label>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-2xl space-y-6">
         <h1 className="text-2xl font-semibold text-gray-800 text-center mb-8">
-          Date - Millis Converter
+          Date-Time Converter
         </h1>
 
         <div className="space-y-4">
@@ -131,44 +199,56 @@ function App() {
             </div>
           </div>
 
+          <div className="flex items-center gap-2">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={showMilliseconds}
+                onChange={(e) => handleMillisecondsToggle(e.target.checked)}
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              <span className="ms-3 text-sm font-medium text-gray-700">Show milliseconds</span>
+            </label>
+          </div>
+
           <div className="space-y-6">
-            <div className="space-y-2">
-              <label className="block">
-                <span className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                  <Calendar size={16} />
-                  Date and Time
-                </span>
-                <input
-                  type="datetime-local"
-                  value={date}
-                  onChange={(e) => {
-                    setDate(e.target.value);
-                    dateToMilliseconds(e.target.value);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </label>
-            </div>
+            {/* Input Section */}
+            {isDateInput ? renderDateInput() : renderMillisecondsInput()}
 
+            {/* Swap Button */}
             <div className="flex justify-center">
-              <ArrowDownUp className="text-gray-400" />
+              <button 
+                onClick={handleSwap}
+                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                title="Swap input type"
+              >
+                <ArrowDownUp className="text-gray-400" />
+              </button>
             </div>
 
+            {/* Output Section */}
             <div className="space-y-2">
               <label className="block">
                 <span className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                  <Clock size={16} />
-                  Milliseconds (Unix Timestamp)
+                  {isDateInput ? (
+                    <>
+                      <Clock size={16} />
+                      Milliseconds Output (Unix Timestamp)
+                    </>
+                  ) : (
+                    <>
+                      <Calendar size={16} />
+                      Date and Time Output
+                    </>
+                  )}
                 </span>
                 <input
-                  type="number"
-                  value={milliseconds}
-                  onChange={(e) => {
-                    setMilliseconds(e.target.value);
-                    millisecondsToDate(e.target.value);
-                  }}
-                  placeholder="Enter milliseconds..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  type={isDateInput ? "number" : "datetime-local"}
+                  value={isDateInput ? milliseconds : date}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 cursor-not-allowed"
+                  step={showMilliseconds ? "0.001" : "1"}
                 />
               </label>
             </div>
